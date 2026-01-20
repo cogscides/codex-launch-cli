@@ -131,6 +131,7 @@ dependencies = [
  "console",
  "crossterm",
  "dirs",
+ "fuzzy-matcher",
  "inquire",
  "serde",
  "serde_json",

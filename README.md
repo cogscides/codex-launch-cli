@@ -32,6 +32,34 @@ Launch picker:
 codex-launch
 ```
 
+Project picker keybinds:
+
+- `enter`: new Codex session in selected project
+- `r`: resume a session in selected repo
+- `g`: browse/resume sessions (scoped)
+- `a`: browse/resume sessions (all)
+- `m`: open action menu for selected project
+- `o`: open config
+- `q` / `esc`: quit
+
+Quick launch by fuzzy project match:
+
+```bash
+codex-launch chatkit
+```
+
+Quick resume by fuzzy session match:
+
+```bash
+codex-launch --resume ethea
+```
+
+Resume exact session id:
+
+```bash
+codex-launch resume-id 019bd6d8-b99b-7eb1-847c-87c3da10673a
+```
+
 Resume a recent session (scoped to configured targets):
 
 ```bash
@@ -44,7 +72,7 @@ Resume a recent session (all sessions):
 codex-launch --recent --all-sessions
 ```
 
-Non-interactive (no TTY): print recent sessions as TSV (`id<TAB>created_at<TAB>cwd`):
+Non-interactive (no TTY): print recent sessions as TSV (`id<TAB>created_at<TAB>cwd<TAB>summary`):
 
 ```bash
 codex-launch --recent --no-ui --limit 20

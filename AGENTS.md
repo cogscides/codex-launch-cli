@@ -25,6 +25,7 @@
 - Repo discovery only scans direct children of each configured `projects.roots` (no deep recursion).
 - Session listing reads only the first ~25 lines of each `rollout-*.jsonl` file to find `type:"session_meta"` (avoid scanning entire files).
 - Repo targets are also inferred from recent session `cwd`s by default.
+- Interactive project picker is a custom `crossterm` UI with keybinds (see `README.md`).
 
 ## Safety
 - Never add or commit secrets (tokens, API keys, private URLs) to this repo.

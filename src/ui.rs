@@ -27,6 +27,8 @@ pub enum Action {
     NewSession,
     ResumeRecentForTarget,
     BrowseRecentGlobal,
+    BrowseRecentAllGlobal,
+    OpenConfig,
     Back,
 }
 
@@ -53,6 +55,8 @@ pub fn pick_action(target: &ProjectTarget) -> Result<Action> {
         "New Codex session",
         "Resume a recent session for this folder",
         "Browse recent sessions (scoped)",
+        "Browse recent sessions (all)",
+        "Open config",
         "Back",
     ];
     let picked = Select::new(&title, opts).prompt()?;
@@ -60,6 +64,8 @@ pub fn pick_action(target: &ProjectTarget) -> Result<Action> {
         "New Codex session" => Action::NewSession,
         "Resume a recent session for this folder" => Action::ResumeRecentForTarget,
         "Browse recent sessions (scoped)" => Action::BrowseRecentGlobal,
+        "Browse recent sessions (all)" => Action::BrowseRecentAllGlobal,
+        "Open config" => Action::OpenConfig,
         _ => Action::Back,
     })
 }

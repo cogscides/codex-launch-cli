@@ -1,8 +1,10 @@
 mod config;
 mod pathfmt;
 mod projects;
+mod quick;
 mod sessions;
 mod timefmt;
+mod tui;
 mod ui;
 
 use std::io::IsTerminal;
@@ -47,6 +49,14 @@ struct Cli {
     #[arg(long)]
     limit: Option<usize>,
 
+    /// Quick resume by searching recent sessions (matches id/cwd/summary)
+    #[arg(long, value_name = "QUERY")]
+    resume: Option<String>,
+
+    /// Quick launch by searching projects (positional query)
+    #[arg(value_name = "PROJECT")]
+    project: Option<String>,
+
     #[command(subcommand)]
     cmd: Option<Cmd>,
 }
@@ -79,8 +89,8 @@ enum Cmd {
         limit: Option<usize>,
     },
 
-    /// Resume a specific session id
-    Resume { id: String },
+    /// Resume a specific session id (exact)
+    ResumeId { id: String },
 
     /// Print resolved config path and exit
     WhereConfig,
@@ -90,6 +100,22 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let config_path = config::resolve_config_path(cli.config.as_deref())?;
     let mut cfg = Config::load_or_init(&config_path)?;
+
+    if cli.cmd.is_none() && cli.resume.is_some() {
+        return quick::resume_by_query(
+            &cfg,
+            cli.resume.as_deref().unwrap_or_default(),
+            cli.dry_run,
+        );
+    }
+
+    if cli.cmd.is_none() && cli.project.is_some() {
+        return quick::launch_by_query(
+            &cfg,
+            cli.project.as_deref().unwrap_or_default(),
+            cli.dry_run,
+        );
+    }
 
     if cli.cmd.is_none() && cli.recent {
         if !cli.no_ui && (!std::io::stdin().is_terminal() || !std::io::stdout().is_terminal()) {
@@ -155,7 +181,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Cmd::Resume { id } => {
+        Cmd::ResumeId { id } => {
             if let Some(item) = sessions::find_session_by_id(&cfg, &id)? {
                 run_codex_resume(&cfg, &item, cli.dry_run)
             } else {
@@ -217,59 +243,120 @@ fn main() -> Result<()> {
                         "The input device is not a TTY. Re-run with `--no-ui` to print lists without prompts."
                     );
                 }
-                let target = ui::pick_target(&targets)?;
-                pick_action_loop(&cfg, &target, cli.dry_run)
+                match tui::pick_project(&targets)? {
+                    tui::ProjectPick::New(target) => run_codex_new(&cfg, &target, cli.dry_run),
+                    tui::ProjectPick::Menu(target) => {
+                        pick_action_loop(&cfg, &config_path, &target, cli.dry_run)
+                    }
+                    tui::ProjectPick::ResumeRepo(target) => {
+                        resume_for_target(&cfg, &target, cli.dry_run)
+                    }
+                    tui::ProjectPick::ResumeScopedGlobal => resume_scoped_global(&cfg, cli.dry_run),
+                    tui::ProjectPick::ResumeAllGlobal => resume_all_global(&cfg, cli.dry_run),
+                    tui::ProjectPick::OpenConfig => open_config(&config_path, cli.dry_run),
+                    tui::ProjectPick::Quit => Ok(()),
+                }
             }
         }
     }
 }
 
-fn pick_action_loop(cfg: &Config, target: &ProjectTarget, dry_run: bool) -> Result<()> {
+fn pick_action_loop(
+    cfg: &Config,
+    config_path: &std::path::Path,
+    target: &ProjectTarget,
+    dry_run: bool,
+) -> Result<()> {
     loop {
         match ui::pick_action(target)? {
             ui::Action::NewSession => return run_codex_new(cfg, target, dry_run),
             ui::Action::ResumeRecentForTarget => {
-                let scoped_repo_root = sessions::git_root_for_path(&target.path);
-                let hide_path = scoped_repo_root.is_some();
-                let items = sessions::list_recent_sessions(
-                    cfg,
-                    scoped_repo_root
-                        .map(|repo_root| sessions::SessionQuery::ForRepoRoot {
-                            repo_root,
-                            limit: cfg.sessions.limit,
-                        })
-                        .unwrap_or_else(|| sessions::SessionQuery::ForCwd {
-                            cwd: target.path.clone(),
-                            limit: cfg.sessions.limit,
-                        }),
-                )?;
-                if items.is_empty() {
-                    ui::print_info("No recent sessions for this folder.");
-                    continue;
-                }
-                let picked = ui::pick_session_scoped(&items, hide_path)?;
-                return run_codex_resume(cfg, &picked, dry_run);
+                return resume_for_target(cfg, target, dry_run);
             }
             ui::Action::BrowseRecentGlobal => {
-                let items = sessions::list_recent_sessions(
-                    cfg,
-                    sessions::SessionQuery::Scoped {
-                        limit: cfg.sessions.limit,
-                    },
-                )?;
-                if items.is_empty() {
-                    ui::print_info("No recent sessions found.");
-                    continue;
-                }
-                let picked = ui::pick_session(&items)?;
-                return run_codex_resume(cfg, &picked, dry_run);
+                return resume_scoped_global(cfg, dry_run);
+            }
+            ui::Action::BrowseRecentAllGlobal => {
+                return resume_all_global(cfg, dry_run);
+            }
+            ui::Action::OpenConfig => {
+                open_config(config_path, dry_run)?;
+                continue;
             }
             ui::Action::Back => return Ok(()),
         }
     }
 }
 
-fn run_codex_new(cfg: &Config, target: &ProjectTarget, dry_run: bool) -> Result<()> {
+fn open_config(config_path: &std::path::Path, dry_run: bool) -> Result<()> {
+    let cmd = if cfg!(target_os = "macos") {
+        let mut c = Command::new("open");
+        c.arg(config_path);
+        c
+    } else if cfg!(target_os = "windows") {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "start"]).arg(config_path);
+        c
+    } else {
+        let mut c = Command::new("xdg-open");
+        c.arg(config_path);
+        c
+    };
+    ui::print_info(&format!("Opening config {}", config_path.display()));
+    run_command(cmd, dry_run)
+}
+
+fn resume_for_target(cfg: &Config, target: &ProjectTarget, dry_run: bool) -> Result<()> {
+    let scoped_repo_root = sessions::git_root_for_path(&target.path);
+    let hide_path = scoped_repo_root.is_some();
+    let items = sessions::list_recent_sessions(
+        cfg,
+        scoped_repo_root
+            .map(|repo_root| sessions::SessionQuery::ForRepoRoot {
+                repo_root,
+                limit: cfg.sessions.limit,
+            })
+            .unwrap_or_else(|| sessions::SessionQuery::ForCwd {
+                cwd: target.path.clone(),
+                limit: cfg.sessions.limit,
+            }),
+    )?;
+    if items.is_empty() {
+        anyhow::bail!("No recent sessions for this folder.");
+    }
+    let picked = ui::pick_session_scoped(&items, hide_path)?;
+    run_codex_resume(cfg, &picked, dry_run)
+}
+
+fn resume_scoped_global(cfg: &Config, dry_run: bool) -> Result<()> {
+    let items = sessions::list_recent_sessions(
+        cfg,
+        sessions::SessionQuery::Scoped {
+            limit: cfg.sessions.limit,
+        },
+    )?;
+    if items.is_empty() {
+        anyhow::bail!("No recent sessions found.");
+    }
+    let picked = ui::pick_session(&items)?;
+    run_codex_resume(cfg, &picked, dry_run)
+}
+
+fn resume_all_global(cfg: &Config, dry_run: bool) -> Result<()> {
+    let items = sessions::list_recent_sessions(
+        cfg,
+        sessions::SessionQuery::All {
+            limit: cfg.sessions.limit,
+        },
+    )?;
+    if items.is_empty() {
+        anyhow::bail!("No recent sessions found.");
+    }
+    let picked = ui::pick_session(&items)?;
+    run_codex_resume(cfg, &picked, dry_run)
+}
+
+pub(crate) fn run_codex_new(cfg: &Config, target: &ProjectTarget, dry_run: bool) -> Result<()> {
     let mut cmd = Command::new(&cfg.codex.bin);
     cmd.current_dir(&target.path);
     cmd.args(cfg.codex.args.iter());
@@ -278,7 +365,7 @@ fn run_codex_new(cfg: &Config, target: &ProjectTarget, dry_run: bool) -> Result<
     run_command(cmd, dry_run)
 }
 
-fn run_codex_resume(cfg: &Config, session: &SessionItem, dry_run: bool) -> Result<()> {
+pub(crate) fn run_codex_resume(cfg: &Config, session: &SessionItem, dry_run: bool) -> Result<()> {
     let mut cmd = Command::new(&cfg.codex.bin);
     cmd.current_dir(&session.cwd);
     cmd.args(cfg.codex.args.iter());
