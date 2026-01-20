@@ -5,6 +5,16 @@ Small interactive launcher for the Codex CLI. It helps you either:
 - start a new Codex session in a chosen folder, or
 - resume a recent session from `~/.codex/sessions`.
 
+## Screenshots
+
+Project picker:
+
+![Project picker](static/1.png)
+
+Session picker:
+
+![Session picker](static/2.png)
+
 ## Prerequisites
 
 - `codex` installed and on `PATH`
