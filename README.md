@@ -1,18 +1,40 @@
 # codex-launch
 
-Interactive launcher for Codex CLI that keeps a small registry of folders and helps you either:
+Small interactive launcher for the Codex CLI. It helps you either:
 
 - start a new Codex session in a chosen folder, or
 - resume a recent session from `~/.codex/sessions`.
 
-## Install (local)
+## Prerequisites
+
+- `codex` installed and on `PATH`
+- Rust toolchain (`cargo`) installed (via `rustup`)
+
+## Install
+
+Clone this repo, then install the binary:
 
 ```bash
-cd /Users/ivan/Documents/Code/codex-launch-cli
+git clone <this-repo>
+cd codex-launch-cli
 cargo install --path .
 ```
 
+Verify:
+
+```bash
+codex-launch --version
+```
+
+Notes:
+
+- `cargo install` places binaries in `~/.cargo/bin` (make sure it’s on your `PATH`).
+- Upgrade from a fresh checkout with `cargo install --path . --force`.
+- Uninstall with `cargo uninstall codex-launch`.
+
 ## Quick start
+
+First run creates `~/.codex-launch/config.toml`.
 
 Add a parent folder that contains multiple git repos (one-level scan):
 
@@ -32,7 +54,7 @@ Launch picker:
 codex-launch
 ```
 
-Project picker keybinds:
+Project picker keybinds (no-args TUI):
 
 - `enter`: new Codex session in selected project
 - `r`: resume a session in selected repo
@@ -82,6 +104,24 @@ codex-launch --recent --no-ui --limit 20
 
 Config is stored at `~/.codex-launch/config.toml` (created on first run).
 
+Example:
+
+```toml
+[codex]
+bin = "codex"
+args = []
+
+[projects]
+roots = ["~/Documents/Code"]
+paths = ["~/.hammerspoon"]
+from_sessions = true
+sessions_limit = 200
+
+[sessions]
+codex_home = "~/.codex"
+limit = 15
+```
+
 Keys you’ll likely care about:
 
 - `codex.bin`: the `codex` executable to run (default: `"codex"`)
@@ -96,3 +136,7 @@ Keys you’ll likely care about:
 - `codex-launch` runs `codex` with `current_dir` set to the selected folder (or the session’s recorded `cwd` when resuming).
 - Repo discovery only scans direct children of each configured `projects.roots`.
 - Targets are also inferred from recent session `cwd`s by default by resolving the git repo root (`projects.from_sessions = true`).
+
+## Troubleshooting
+
+- If the full-screen project picker renders badly in your terminal, try `codex-launch <substring>` (it uses a simpler inline picker) and report your terminal + `$TERM`.
