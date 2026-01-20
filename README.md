@@ -12,15 +12,22 @@ Small interactive launcher for the Codex CLI. It helps you either:
 
 ## Install
 
-Clone this repo, then install the binary:
+1. Clone this repo:
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/cogscides/codex-launch-cli.git
+// or
+gh repo clone https://github.com/cogscides/codex-launch-cli.git
+```
+
+2. Install the binary:
+
+```
 cd codex-launch-cli
 cargo install --path .
 ```
 
-Verify:
+3. Verify:
 
 ```bash
 codex-launch --version
