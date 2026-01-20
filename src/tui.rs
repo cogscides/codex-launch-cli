@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::panic;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -25,14 +26,17 @@ pub enum ProjectPick {
 
 pub fn pick_project(targets: &[ProjectTarget]) -> Result<ProjectPick> {
     let mut stdout = io::stdout();
-    terminal::enable_raw_mode()?;
-    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
+    let _guard = TerminalGuard::enter(&mut stdout)?;
 
-    let result = pick_project_inner(&mut stdout, targets);
-
-    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
-    terminal::disable_raw_mode()?;
-    result
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        pick_project_inner(&mut stdout, targets)
+    }));
+    match result {
+        Ok(r) => r,
+        Err(_) => anyhow::bail!(
+            "UI crashed (panic). Terminal should be restored; re-run with `--no-ui` if needed."
+        ),
+    }
 }
 
 fn pick_project_inner(stdout: &mut io::Stdout, targets: &[ProjectTarget]) -> Result<ProjectPick> {
@@ -94,6 +98,53 @@ fn selected(
         .get(cursor_idx)
         .and_then(|idx| targets.get(*idx))
         .cloned()
+}
+
+struct TerminalGuard {
+    use_alt_screen: bool,
+}
+
+impl TerminalGuard {
+    fn enter(stdout: &mut io::Stdout) -> Result<Self> {
+        terminal::enable_raw_mode()?;
+
+        let use_alt_screen = should_use_alt_screen();
+        if use_alt_screen {
+            execute!(stdout, terminal::EnterAlternateScreen)?;
+        } else {
+            execute!(
+                stdout,
+                terminal::Clear(ClearType::All),
+                cursor::MoveTo(0, 0)
+            )?;
+        }
+        execute!(stdout, cursor::Hide)?;
+
+        Ok(Self { use_alt_screen })
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, cursor::Show);
+        if self.use_alt_screen {
+            let _ = execute!(stdout, terminal::LeaveAlternateScreen);
+        } else {
+            let _ = execute!(stdout, style::Print("\n"));
+        }
+        let _ = terminal::disable_raw_mode();
+    }
+}
+
+fn should_use_alt_screen() -> bool {
+    if std::env::var_os("CODEX_LAUNCH_NO_ALT_SCREEN").is_some() {
+        return false;
+    }
+    if std::env::var_os("ZELLIJ").is_some() {
+        return false;
+    }
+    true
 }
 
 fn filter_targets(targets: &[ProjectTarget], matcher: &SkimMatcherV2, filter: &str) -> Vec<usize> {

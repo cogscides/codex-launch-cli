@@ -42,6 +42,12 @@ Project picker keybinds:
 - `o`: open config
 - `q` / `esc`: quit
 
+If the picker UI renders badly in your terminal/multiplexer, disable alternate-screen:
+
+```bash
+CODEX_LAUNCH_NO_ALT_SCREEN=1 codex-launch
+```
+
 Quick launch by fuzzy project match:
 
 ```bash
