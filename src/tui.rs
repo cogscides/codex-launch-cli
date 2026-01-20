@@ -249,6 +249,7 @@ fn render(
     cols: usize,
     rows: usize,
 ) -> Result<()> {
+    // In raw mode some terminals don't translate '\n' to CRLF; use explicit CRLF.
     let mut out = String::new();
 
     out.push_str(&format!(
@@ -289,7 +290,7 @@ fn render(
     stdout
         .queue(terminal::Clear(ClearType::All))?
         .queue(cursor::MoveTo(0, 0))?;
-    stdout.queue(style::Print(out))?;
+    stdout.queue(style::Print(out.replace('\n', "\r\n")))?;
     stdout.flush()?;
     Ok(())
 }
