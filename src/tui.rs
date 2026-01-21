@@ -128,8 +128,10 @@ fn pick_project_inner(
             }
             View::ProjectSessions { target, sessions } => {
                 let filtered = filter_sessions(sessions, &matcher, &project_sessions_filter);
-                if project_sessions_cursor >= filtered.len() && !filtered.is_empty() {
-                    project_sessions_cursor = filtered.len() - 1;
+                // Cursor includes "Start new session" at row 0, so the maximum valid
+                // cursor position is `filtered.len()` (the last session row).
+                if project_sessions_cursor > filtered.len() {
+                    project_sessions_cursor = filtered.len();
                 }
                 render_project_sessions(
                     stdout,
@@ -309,12 +311,13 @@ fn sessions_for_target(
     limit: usize,
 ) -> Vec<SessionItem> {
     let repo_root = crate::sessions::git_root_for_path(&target.path);
+    let target_is_repo_root = repo_root.as_ref().is_some_and(|r| r == &target.path);
     let mut out = Vec::new();
     for s in sessions_all.iter() {
         if out.len() >= limit {
             break;
         }
-        if let Some(rr) = repo_root.as_ref() {
+        if target_is_repo_root && let Some(rr) = repo_root.as_ref() {
             if crate::sessions::git_root_for_path(&s.cwd).is_some_and(|x| x == *rr) {
                 out.push(s.clone());
             }
@@ -599,10 +602,8 @@ fn render_projects(
 
     out.push_str(&tabs_line(Tab::Projects));
     out.push('\n');
-    out.push_str(&format!(
-        "{}\n",
-        "enter=choose  n=new  →=sessions  o=config  q=quit".dim()
-    ));
+    let help = "⏎ sessions · n new · ←/→ tabs · o config · q quit";
+    out.push_str(&format!("{}\n", truncate(help.to_string(), cols).dim()));
     out.push_str(&format!("{} {}\n", "Filter:".bold(), filter));
 
     let list_rows = rows.saturating_sub(5).max(1);
@@ -650,11 +651,11 @@ fn render_sessions(
     out.push_str(&tabs_line(tab));
     out.push('\n');
     let help = match tab {
-        Tab::SessionsScoped => "enter=resume  esc/←=projects  →=all  o=config  q=quit",
-        Tab::SessionsAll => "enter=resume  esc/←=scoped  o=config  q=quit",
-        _ => "enter=resume  o=config  q=quit",
+        Tab::SessionsScoped => "⏎ resume · esc back · ←/→ tabs · o config · q quit",
+        Tab::SessionsAll => "⏎ resume · esc back · ← tabs · o config · q quit",
+        _ => "⏎ resume · esc back · o config · q quit",
     };
-    out.push_str(&format!("{}\n", help.dim()));
+    out.push_str(&format!("{}\n", truncate(help.to_string(), cols).dim()));
     out.push_str(&format!("{} {}\n", "Filter:".bold(), filter));
 
     let list_rows = rows.saturating_sub(5).max(1);
@@ -704,10 +705,8 @@ fn render_project_sessions(
         "Project:".bold(),
         truncate(target.label.clone(), cols.saturating_sub(10))
     ));
-    out.push_str(&format!(
-        "{}\n",
-        "enter=select  esc=back  o=config  q=quit".dim()
-    ));
+    let help = "⏎ select · esc back · o config · q quit";
+    out.push_str(&format!("{}\n", truncate(help.to_string(), cols).dim()));
     out.push_str(&format!("{} {}\n", "Filter:".bold(), filter));
 
     // Cursor includes "Start new session" at row 0.
