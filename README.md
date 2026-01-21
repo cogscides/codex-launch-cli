@@ -53,6 +53,11 @@ Notes:
 
 First run creates `~/.codex-launch/config.toml`.
 
+You can usually start using it immediately without configuring anything:
+
+- it reads your recent sessions from `~/.codex/sessions` and can resume them, and
+- it can infer project targets from your recent sessions by resolving the git repo root (so projects you’ve used in Codex recently tend to show up automatically).
+
 Add a parent folder that contains multiple git repos (one-level scan):
 
 ```bash
@@ -73,13 +78,11 @@ codex-launch
 
 Project picker keybinds (no-args TUI):
 
-- `enter`: new Codex session in selected project
-- `r`: resume a session in selected repo
-- `g`: browse/resume sessions (scoped)
-- `a`: browse/resume sessions (all)
-- `m`: open action menu for selected project
+- `enter`: open “Start new session” + recent sessions for the selected project
+- `n`: start a new session immediately in the selected project
+- `←` / `→`: switch tabs (Projects / Sessions (scoped) / Sessions (all))
 - `o`: open config
-- `q` / `esc`: quit
+- `q`: quit
 
 Quick launch by fuzzy project match:
 

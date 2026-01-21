@@ -13,6 +13,7 @@ use crate::timefmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TargetKind {
+    CurrentWorkingDir,
     RootChildGitRepo,
     ExplicitPath,
     SessionHistory,
